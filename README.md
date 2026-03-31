@@ -152,3 +152,22 @@ hiresense-ai/
 - **Submission Date:** April 5, 2026
 - **Model Used:** `deepseek-v3.2` via Oxlo.ai API
 - **Registered Oxlo.ai Email:** naminenirakesh@gmail.com
+
+
+---
+## 📸 Screenshots
+
+### 💬 Ask AI
+![Ask AI](AI.png)
+
+### 📄 Resume Analyzer
+![Resume Analyzer](resume.png)
+
+### 🎯 ATS Job Match
+![ATS Match](ats%20match.png)
+
+### ✨ Improve My Resume
+![Improve Resume](improve%20my%20resume.png)
+
+### 🎙️ Interview Simulator
+![Simulator](simulator.png)
