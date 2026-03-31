@@ -75,7 +75,7 @@ Job seekers struggle with:
 
 ## 🚀 Live Demo
 
-🔗 **[HireSense AI — Live App](YOUR_STREAMLIT_LINK_HERE)**
+🔗 **[HireSense AI — Live App](https://hiresense-ai-vdrhyelxtvk9ac7ngrnhtn.streamlit.app)**
 
 ---
 
