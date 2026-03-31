@@ -31,7 +31,7 @@ def extract_text_from_docx(file_bytes):
         return f"DOCX read error: {e}"
 
 # ─────────────────────────────────────────────
-# API KEY — .env లేదా secrets.toml నుండి తీసుకుంటుంది
+# API KEY
 # ─────────────────────────────────────────────
 def get_api_key():
     try:
@@ -65,12 +65,13 @@ SYSTEM_PROMPT_RAW = """You are HireSense AI, an expert interview coach.
 - Be concise, structured, and professional."""
 
 # ─────────────────────────────────────────────
-# CORE API — simple blocking, no streaming
+# CORE API
+# FIX 1: All error messages in English only
 # ─────────────────────────────────────────────
 def call_api(prompt, system_prompt, max_tokens=700):
     API_KEY = get_api_key()
     if not API_KEY:
-        return None, "❌ API key దొరకలేదు! `.env` లో `OXLO_API_KEY=మీ_key` అని పెట్టారో చెక్ చేయండి."
+        return None, "❌ API key not found! Please check your .env file and add OXLO_API_KEY."
 
     headers = {
         "Authorization": f"Bearer {API_KEY}",
@@ -95,7 +96,7 @@ def call_api(prompt, system_prompt, max_tokens=700):
                 if attempt < 2:
                     time.sleep(6)
                     continue
-                return None, "⚠️ Rate limit. 1-2 నిమిషాలు wait చేసి మళ్ళీ try చేయండి."
+                return None, "⚠️ Rate limit reached. This is a free-tier API — please wait 1–2 minutes and try again."
 
             res_json = response.json()
 
@@ -106,7 +107,7 @@ def call_api(prompt, system_prompt, max_tokens=700):
                     if attempt < 2:
                         time.sleep(retry_after + 1)
                         continue
-                    return None, "⚠️ Rate limit. 1-2 నిమిషాలు wait చేసి మళ్ళీ try చేయండి."
+                    return None, "⚠️ Rate limit reached. This is a free-tier API — please wait 1–2 minutes and try again."
                 return None, f"❌ API Error ({response.status_code}): {msg}"
 
             if "choices" in res_json and res_json["choices"]:
@@ -118,13 +119,13 @@ def call_api(prompt, system_prompt, max_tokens=700):
             if attempt < 2:
                 time.sleep(3)
                 continue
-            return None, "❌ Timeout. మళ్ళీ try చేయండి."
+            return None, "❌ Request timed out. Please try again."
         except requests.exceptions.ConnectionError:
-            return None, "❌ Network error. Internet check చేయండి."
+            return None, "❌ Network error. Please check your internet connection."
         except Exception as e:
             return None, f"❌ Error: {str(e)}"
 
-    return None, "❌ All retries failed. కొంచెం wait చేసి try చేయండి."
+    return None, "❌ All retries failed. Please wait a moment and try again."
 
 
 def ask_ai(prompt, tag="✦ AI Answer"):
@@ -197,11 +198,12 @@ html, body, .stApp { background-color: #f7f6f2 !important; color: #1a1a1a; }
 .stat-num { font-family:'Playfair Display',serif; font-size:1.9rem; font-weight:900; color:#0f172a; line-height:1; }
 .stat-lbl { font-size:0.73rem; color:#94a3b8; font-weight:500; margin-top:0.25rem; }
 .field-label { font-size:0.75rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#94a3b8; margin-bottom:0.4rem; }
-.stTextArea textarea { background:#fff!important; border:1.5px solid #e2e8f0!important; border-radius:14px!important; color:#0f172a!important; font-family:'Epilogue',sans-serif!important; font-size:0.91rem!important; line-height:1.7!important; padding:1rem 1.2rem!important; opacity:1!important; -webkit-text-fill-color:#0f172a!important; }
-.stTextArea textarea:focus { border-color:#2563eb!important; outline:none!important; }
-.stTextArea textarea::placeholder { color:#b0bec5!important; opacity:1!important; }
-.stTextInput input { background:#fff!important; border:1.5px solid #e2e8f0!important; border-radius:12px!important; color:#0f172a!important; font-family:'Epilogue',sans-serif!important; font-size:0.91rem!important; padding:0.7rem 1.1rem!important; }
-.stTextInput input:focus { border-color:#2563eb!important; outline:none!important; }
+.stTextArea textarea { background:#fff!important; border:1.5px solid #e2e8f0!important; border-radius:14px!important; color:#0f172a!important; caret-color:#2563eb!important; cursor:text!important; font-family:'Epilogue',sans-serif!important; font-size:0.91rem!important; font-weight:400!important; line-height:1.7!important; padding:1rem 1.2rem!important; opacity:1!important; -webkit-text-fill-color:#0f172a!important; }
+.stTextArea textarea:focus { border-color:#2563eb!important; box-shadow:0 0 0 3px rgba(37,99,235,0.08)!important; outline:none!important; caret-color:#2563eb!important; }
+.stTextArea textarea::placeholder { color:#c8d3dc!important; font-weight:300!important; font-style:italic!important; opacity:1!important; }
+.stTextInput input { background:#fff!important; border:1.5px solid #e2e8f0!important; border-radius:12px!important; color:#0f172a!important; caret-color:#2563eb!important; cursor:text!important; font-family:'Epilogue',sans-serif!important; font-size:0.91rem!important; padding:0.7rem 1.1rem!important; -webkit-text-fill-color:#0f172a!important; }
+.stTextInput input:focus { border-color:#2563eb!important; box-shadow:0 0 0 3px rgba(37,99,235,0.08)!important; outline:none!important; caret-color:#2563eb!important; }
+.stTextInput input::placeholder { color:#c8d3dc!important; font-weight:300!important; font-style:italic!important; opacity:1!important; }
 div[data-testid="stForm"] button, div.stButton > button { background-color:#2563eb!important; color:#fff!important; font-family:'Epilogue',sans-serif!important; font-weight:700!important; font-size:0.9rem!important; border:none!important; border-radius:10px!important; padding:0.65rem 1.7rem!important; box-shadow:0 4px 14px rgba(37,99,235,0.4)!important; min-width:150px!important; cursor:pointer!important; }
 div[data-testid="stForm"] button:hover, div.stButton > button:hover { background-color:#1d4ed8!important; transform:translateY(-1px)!important; }
 .resp-card { background:#fff; border:1.5px solid #e2e8f0; border-radius:18px; padding:1.8rem; margin-top:1.4rem; box-shadow:0 2px 14px rgba(0,0,0,0.06); }
@@ -411,13 +413,7 @@ Resume:
             if not err:
                 st.session_state.resume_analyzed = True
 
-    if st.session_state.resume_analyzed and not st.session_state.ats_matched:
-        st.markdown('<div style="margin-top:1.2rem;padding:0.9rem 1.3rem;background:#fefce8;border:1.5px solid #fde68a;border-radius:12px;font-size:0.82rem;color:#92400e;">✅ Resume analyzed! Now click <strong>🎯 ATS Job Match</strong> to unlock <strong>✨ Improve My Resume</strong>.</div>', unsafe_allow_html=True)
-
-    if st.session_state.ats_matched and not st.session_state.resume_analyzed:
-        st.markdown('<div style="margin-top:1.2rem;padding:0.9rem 1.3rem;background:#fefce8;border:1.5px solid #fde68a;border-radius:12px;font-size:0.82rem;color:#92400e;">✅ ATS Match done! Now click <strong>✦ Analyze Resume</strong> to unlock <strong>✨ Improve My Resume</strong>.</div>', unsafe_allow_html=True)
-
-    if st.session_state.resume_analyzed and st.session_state.ats_matched and st.session_state.resume_text_cache:
+    if st.session_state.resume_analyzed and st.session_state.resume_text_cache:
         st.markdown('<div style="margin-top:1.5rem;padding:1.2rem 1.5rem;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:16px;"><div style="font-size:0.88rem;font-weight:700;color:#1e40af;">✨ Ready to auto-fix your resume?</div><div style="font-size:0.78rem;color:#3b82f6;margin-top:0.2rem;">AI will rewrite bullet points, add keywords, improve summary & fix structure</div></div>', unsafe_allow_html=True)
         if st.button("✨ Improve My Resume", key="improve_btn"):
             jd_section = f"\n\nJob Target:\n{st.session_state.jd_context_cache}" if st.session_state.jd_context_cache else ""
@@ -532,7 +528,13 @@ elif st.session_state.active_page == "Simulator":
     # SETUP
     if st.session_state.sim_stage == "setup":
         st.markdown('<div class="field-label">Target Role</div>', unsafe_allow_html=True)
-        role_input = st.text_input("", placeholder='e.g. "AI Engineer", "Data Analyst"', key="sim_role_input")
+        # FIX 2: Simulator placeholder now visible — label="" removed, using st.text_input label workaround
+        role_input = st.text_input(
+            label="Target Role",
+            placeholder='e.g. "AI Engineer", "Data Analyst", "Full Stack Developer"',
+            key="sim_role_input",
+            label_visibility="collapsed"
+        )
         col1, col2 = st.columns([1.2, 5])
         with col1:
             start_btn = st.button("🎯 Start Interview", key="start_sim_btn")
@@ -543,7 +545,7 @@ elif st.session_state.active_page == "Simulator":
                 st.session_state.sim_role = role_input.strip()
                 st.session_state.sim_question_num = 1
                 st.session_state.sim_history = []
-                with st.spinner("🎙️ Preparing question 1..."):
+                with st.spinner("🎙️ Preparing your first question..."):
                     q, err = ask_ai_silent(f"You are a strict interviewer for a {st.session_state.sim_role} role. Ask question 1 of {TOTAL_QUESTIONS}. ONE question only. No preamble.")
                 if err:
                     st.error(err)
@@ -561,7 +563,13 @@ elif st.session_state.active_page == "Simulator":
         st.markdown('<div class="field-label" style="margin-top:1rem;">Your Answer</div>', unsafe_allow_html=True)
 
         with st.form(key=f"answer_form_{q_num}"):
-            user_answer = st.text_area("", placeholder="Type your answer here...", height=160, key=f"sim_answer_{q_num}")
+            user_answer = st.text_area(
+                label="Your Answer",
+                placeholder="Type your answer here... Be as detailed as you would in a real interview.",
+                height=160,
+                key=f"sim_answer_{q_num}",
+                label_visibility="collapsed"
+            )
             submit_answer = st.form_submit_button("✦ Submit Answer")
 
         if user_answer and user_answer.strip():
