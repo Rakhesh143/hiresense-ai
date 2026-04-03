@@ -66,7 +66,6 @@ SYSTEM_PROMPT_RAW = """You are HireSense AI, an expert interview coach.
 
 # ─────────────────────────────────────────────
 # CORE API
-# FIX 1: All error messages in English only
 # ─────────────────────────────────────────────
 def call_api(prompt, system_prompt, max_tokens=700):
     API_KEY = get_api_key()
@@ -169,6 +168,8 @@ defaults = {
     "sim_history": [],
     "sim_stage": "setup",
     "last_ask_result": "",
+    "sim_feedback_cache": "",
+    "sim_answered": False,
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -528,7 +529,6 @@ elif st.session_state.active_page == "Simulator":
     # SETUP
     if st.session_state.sim_stage == "setup":
         st.markdown('<div class="field-label">Target Role</div>', unsafe_allow_html=True)
-        # FIX 2: Simulator placeholder now visible — label="" removed, using st.text_input label workaround
         role_input = st.text_input(
             label="Target Role",
             placeholder='e.g. "AI Engineer", "Data Analyst", "Full Stack Developer"',
@@ -545,8 +545,13 @@ elif st.session_state.active_page == "Simulator":
                 st.session_state.sim_role = role_input.strip()
                 st.session_state.sim_question_num = 1
                 st.session_state.sim_history = []
+                st.session_state.sim_feedback_cache = ""
+                st.session_state.sim_answered = False
                 with st.spinner("🎙️ Preparing your first question..."):
-                    q, err = ask_ai_silent(f"You are a strict interviewer for a {st.session_state.sim_role} role. Ask question 1 of {TOTAL_QUESTIONS}. ONE question only. No preamble.")
+                    q, err = ask_ai_silent(
+                        f"You are a strict interviewer for a {st.session_state.sim_role} role. "
+                        f"Ask question 1 of {TOTAL_QUESTIONS}. ONE question only. No preamble."
+                    )
                 if err:
                     st.error(err)
                 else:
@@ -558,29 +563,40 @@ elif st.session_state.active_page == "Simulator":
     elif st.session_state.sim_stage == "questioning":
         q_num = st.session_state.sim_question_num
         pct = int(((q_num - 1) / TOTAL_QUESTIONS) * 100)
-        st.markdown(f'<div style="display:flex;justify-content:space-between;margin-bottom:0.3rem;"><span style="font-size:0.75rem;font-weight:600;color:#64748b;text-transform:uppercase;">Progress</span><span style="font-size:0.75rem;font-weight:700;color:#2563eb;">Question {q_num} of {TOTAL_QUESTIONS}</span></div><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:{pct}%;"></div></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="sim-question-card"><div class="sim-question-label">🎙️ Interviewer — Question {q_num}</div><div class="sim-question-text">{st.session_state.sim_question}</div></div>', unsafe_allow_html=True)
-        st.markdown('<div class="field-label" style="margin-top:1rem;">Your Answer</div>', unsafe_allow_html=True)
 
-        with st.form(key=f"answer_form_{q_num}"):
-            user_answer = st.text_area(
-                label="Your Answer",
-                placeholder="Type your answer here... Be as detailed as you would in a real interview.",
-                height=160,
-                key=f"sim_answer_{q_num}",
-                label_visibility="collapsed"
-            )
-            submit_answer = st.form_submit_button("✦ Submit Answer")
+        st.markdown(
+            f'<div style="display:flex;justify-content:space-between;margin-bottom:0.3rem;">'
+            f'<span style="font-size:0.75rem;font-weight:600;color:#64748b;text-transform:uppercase;">Progress</span>'
+            f'<span style="font-size:0.75rem;font-weight:700;color:#2563eb;">Question {q_num} of {TOTAL_QUESTIONS}</span></div>'
+            f'<div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:{pct}%;"></div></div>',
+            unsafe_allow_html=True
+        )
+        st.markdown(
+            f'<div class="sim-question-card">'
+            f'<div class="sim-question-label">🎙️ Interviewer — Question {q_num}</div>'
+            f'<div class="sim-question-text">{st.session_state.sim_question}</div></div>',
+            unsafe_allow_html=True
+        )
 
-        if user_answer and user_answer.strip():
-            word_count_badge(user_answer, "Answer: ")
+        # Show answer form only if not yet answered
+        if not st.session_state.sim_answered:
+            st.markdown('<div class="field-label" style="margin-top:1rem;">Your Answer</div>', unsafe_allow_html=True)
+            with st.form(key=f"answer_form_{q_num}"):
+                user_answer = st.text_area(
+                    label="Your Answer",
+                    placeholder="Type your answer here... Be as detailed as you would in a real interview.",
+                    height=160,
+                    key=f"sim_answer_{q_num}",
+                    label_visibility="collapsed"
+                )
+                submit_answer = st.form_submit_button("✦ Submit Answer")
 
-        if submit_answer:
-            if not user_answer.strip():
-                st.warning("Please type your answer before submitting.")
-                st.stop()
+            if submit_answer:
+                if not user_answer.strip():
+                    st.warning("Please type your answer before submitting.")
+                    st.stop()
 
-            feedback_prompt = f"""Expert interview coach for {st.session_state.sim_role} role.
+                feedback_prompt = f"""Expert interview coach for {st.session_state.sim_role} role.
 
 Question: {st.session_state.sim_question}
 Answer: {user_answer}
@@ -597,34 +613,60 @@ Evaluate:
 💡 IMPROVED ANSWER:
 (3-5 sentence model answer)"""
 
-            feedback, err = ask_ai_raw(feedback_prompt)
-            if err:
-                st.error(err)
-            else:
-                st.session_state.sim_history.append({"question": st.session_state.sim_question, "answer": user_answer, "feedback": feedback, "q_num": q_num})
-                st.markdown(f'<div class="sim-feedback-card"><div class="resp-tag">✦ AI Feedback — Q{q_num}</div><div class="resp-body">{feedback}</div></div>', unsafe_allow_html=True)
+                with st.spinner("⏳ Evaluating your answer..."):
+                    feedback, err = ask_ai_raw(feedback_prompt)
 
-                if q_num < TOTAL_QUESTIONS:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    col1, col2 = st.columns([1.3, 5])
-                    with col1:
-                        next_btn = st.button("Next Question ➜", key=f"next_btn_{q_num}")
-                    if next_btn:
-                        with st.spinner("🎙️ Loading next question..."):
-                            nq, err = ask_ai_silent(f"Interviewer for {st.session_state.sim_role}. Ask question {q_num+1} of {TOTAL_QUESTIONS}. Previous: {[h['question'] for h in st.session_state.sim_history]}. Different topic. ONE question only.")
-                        if err:
-                            st.error(err)
-                        else:
-                            st.session_state.sim_question = nq
-                            st.session_state.sim_question_num = q_num + 1
-                            st.rerun()
+                if err:
+                    st.error(err)
                 else:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    col1, col2 = st.columns([1.5, 5])
-                    with col1:
-                        if st.button("📊 See Final Report", key="finish_btn"):
-                            st.session_state.sim_stage = "done"
-                            st.rerun()
+                    st.session_state.sim_history.append({
+                        "question": st.session_state.sim_question,
+                        "answer": user_answer,
+                        "feedback": feedback,
+                        "q_num": q_num
+                    })
+                    st.session_state.sim_feedback_cache = feedback
+                    st.session_state.sim_answered = True
+                    st.rerun()
+
+        # Show feedback + next/finish buttons after answering
+        if st.session_state.sim_answered and st.session_state.sim_feedback_cache:
+            st.markdown(
+                f'<div class="sim-feedback-card">'
+                f'<div class="resp-tag">✦ AI Feedback — Q{q_num}</div>'
+                f'<div class="resp-body">{st.session_state.sim_feedback_cache}</div></div>',
+                unsafe_allow_html=True
+            )
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            if q_num < TOTAL_QUESTIONS:
+                col1, col2 = st.columns([1.3, 5])
+                with col1:
+                    next_btn = st.button("Next Question ➜", key=f"next_btn_{q_num}")
+                if next_btn:
+                    with st.spinner("🎙️ Loading next question..."):
+                        nq, err = ask_ai_silent(
+                            f"Interviewer for {st.session_state.sim_role}. "
+                            f"Ask question {q_num + 1} of {TOTAL_QUESTIONS}. "
+                            f"Previous questions: {[h['question'] for h in st.session_state.sim_history]}. "
+                            f"Ask about a DIFFERENT topic. ONE question only. No preamble."
+                        )
+                    if err:
+                        st.error(err)
+                    else:
+                        st.session_state.sim_question = nq
+                        st.session_state.sim_question_num = q_num + 1
+                        st.session_state.sim_feedback_cache = ""
+                        st.session_state.sim_answered = False
+                        st.rerun()
+            else:
+                col1, col2 = st.columns([1.5, 5])
+                with col1:
+                    if st.button("📊 See Final Report", key="finish_btn"):
+                        st.session_state.sim_stage = "done"
+                        st.session_state.sim_feedback_cache = ""
+                        st.session_state.sim_answered = False
+                        st.rerun()
 
     # FINAL REPORT
     elif st.session_state.sim_stage == "done":
@@ -663,16 +705,26 @@ Evaluate:
                 if "SCORE:" in line:
                     score_display = line.split("SCORE:")[-1].strip(); break
             with st.expander(f"Q{item['q_num']}: {item['question'][:80]}{'...' if len(item['question'])>80 else ''}"):
-                st.markdown(f'<div style="margin-bottom:0.8rem;"><span class="sim-history-score">Score: {score_display}</span></div><div style="font-size:0.82rem;font-weight:600;color:#64748b;margin-bottom:0.3rem;">YOUR ANSWER</div><div style="background:#f8fafc;border-radius:10px;padding:0.9rem 1.1rem;font-size:0.87rem;color:#334155;line-height:1.7;margin-bottom:1rem;">{item["answer"]}</div><div style="font-size:0.82rem;font-weight:600;color:#64748b;margin-bottom:0.3rem;">AI FEEDBACK</div><div class="resp-body">{item["feedback"]}</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div style="margin-bottom:0.8rem;"><span class="sim-history-score">Score: {score_display}</span></div>'
+                    f'<div style="font-size:0.82rem;font-weight:600;color:#64748b;margin-bottom:0.3rem;">YOUR ANSWER</div>'
+                    f'<div style="background:#f8fafc;border-radius:10px;padding:0.9rem 1.1rem;font-size:0.87rem;color:#334155;line-height:1.7;margin-bottom:1rem;">{item["answer"]}</div>'
+                    f'<div style="font-size:0.82rem;font-weight:600;color:#64748b;margin-bottom:0.3rem;">AI FEEDBACK</div>'
+                    f'<div class="resp-body">{item["feedback"]}</div>',
+                    unsafe_allow_html=True
+                )
 
         st.markdown("<br>", unsafe_allow_html=True)
         col1, col2 = st.columns([1.4, 5])
         with col1:
             if st.button("🔄 New Interview", key="restart_btn"):
                 st.session_state.sim_stage = "setup"
-                st.session_state.sim_role = st.session_state.sim_question = ""
+                st.session_state.sim_role = ""
+                st.session_state.sim_question = ""
                 st.session_state.sim_question_num = 0
                 st.session_state.sim_history = []
+                st.session_state.sim_feedback_cache = ""
+                st.session_state.sim_answered = False
                 st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
